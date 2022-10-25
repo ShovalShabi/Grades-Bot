@@ -7,6 +7,7 @@ from threading import Thread
 from threading import Lock
 from selenium.common.exceptions import TimeoutException
 from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import InvalidSessionIdException
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from Course import Course
@@ -81,14 +82,13 @@ class Bot(Thread):
         :return: None
         """
         while True:
-            self.driver.refresh()
+            login_func()  #costumizing different login functions for different bots
             time.sleep(2)
             if self.driver.title in ["ציונים - שובל שאבי","דף הבית","אפקה-נט לסטודנט אפקה - המכללה האקדמית להנדסה בתל-אביב",
                                      "אפקה-נט לסטודנט אפקה - המכללה האקדמית להנדסה בתל-אביב רשימת ציונים","מכללת אפקה"]:
                 self.driver.close()
                 break
         self.send_mail(msg,self.user)
-        login_func()  #costumizing different login functions for different bots
 
     def load_from_file(self,file_name) -> dict:
         """
@@ -283,7 +283,6 @@ class GradesBot(AfekaBot):
             self.sweep_grades()
             self.check_if_grades_modified()
             self.driver.close()
-            #self.current_courses[self.user.semester_selection]["6002 אנגלית מתקדמים א' (בינוניים) סופי-הרצאה"].grade="אין פטור"
             time.sleep(1*60)
 
 #***************************************************************************** Application Bot **********************************************************************************************#
@@ -420,7 +419,6 @@ class ApplicationBot(AfekaBot):
             self.swipe_applications()
             self.check_if_status_changed()
             self.driver.close()
-            #self.current_applications["847092"].status="טיפול"
             time.sleep(1*60)
 
 #*********************************************************************************** Moodle Bot *********************************************************************************************#
@@ -466,7 +464,7 @@ class MoodleBot(Bot):
             username.send_keys(self.user.username)
             password.send_keys(self.user.password)
             password.send_keys(Keys.RETURN)
-        except (NoSuchElementException, TimeoutException):
+        except (NoSuchElementException, TimeoutException, InvalidSessionIdException):
             self.reconnect(msg="I failed to enter moodle, going on air soon!",login_func=self.enter_to_moodle)
 
     def select_year_of_swipe(self) -> None:
@@ -482,7 +480,7 @@ class MoodleBot(Bot):
                 if self.user.year_selection in item.text:
                     item.click()
                     break
-        except (NoSuchElementException, TimeoutException):
+        except (NoSuchElementException, TimeoutException, InvalidSessionIdException):
             self.reconnect(msg="I failed to select year in moodle, going on air soon!", login_func=self.enter_to_moodle)
 
     def go_to_grades_table(self) -> None:
@@ -497,7 +495,7 @@ class MoodleBot(Bot):
             properties.click()
             grades_btn = self.driver.find_element(by=By.PARTIAL_LINK_TEXT, value="ציונים")
             grades_btn.click()
-        except (NoSuchElementException, TimeoutException):
+        except (NoSuchElementException, TimeoutException, InvalidSessionIdException):
             self.reconnect(msg="I failed to enter grades table in moodlr, going air soon",login_func=self.enter_to_moodle)
 
     def fetch_all_courses_links(self) -> None:
@@ -513,7 +511,7 @@ class MoodleBot(Bot):
             for element in rows_elements:
                 links_courses.append(self.driver.find_element(by=By.XPATH, value=f'//*[@id="{element.get_attribute("id") + "_c0"}"]/a'))
             self.courses_links = links_courses
-        except (NoSuchElementException, TimeoutException):
+        except (NoSuchElementException, TimeoutException, InvalidSessionIdException):
             self.reconnect(msg="I failed to fetch courses links in moodle, going on air soon!", login_func=self.enter_to_moodle)
 
     def swipe_assignments(self) -> None:
@@ -621,6 +619,5 @@ class MoodleBot(Bot):
             self.swipe_assignments()
             self.check_if_changed()
             self.driver.close()
-            #self.current_assignments["פיזיקה חשמל ומגנטיות תרגול - חמישי 10-12"]["תרגילי בית ל 28/10"].grade=90
             time.sleep(1 * 60)
 
