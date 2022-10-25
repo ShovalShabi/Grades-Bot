@@ -34,8 +34,8 @@ class Bot(Thread):
     """
 
     serviced_path = Service("C:\Program Files\WebScraping\chromedriver.exe")
-    bot_email = "botshoval@gmail.com"
-    bot_email_password = "xbbgufijxuedkoqo"  # application password for Google account
+    bot_email = "your-bot-email@gmail.com"
+    bot_email_password = "your-bot-app-password"  # application password for Google account
     port = 465  # ssl protocol port
     mail_lock = Lock()
     save_lock = Lock()
