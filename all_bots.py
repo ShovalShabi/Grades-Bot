@@ -189,7 +189,6 @@ class GradesBot(AfekaBot):
         """
         try:
             grades_sheet_btn = WebDriverWait(self.driver,10).until(EC.presence_of_element_located((By.PARTIAL_LINK_TEXT,"רשימת ציונים")))  #Navigating to grades sheet section
-            #grades_sheet_btn = self.driver.find_element(by=By.PARTIAL_LINK_TEXT, value="רשימת ציונים")
             grades_sheet_btn.click()
             year_cmb = Select(self.driver.find_element(by=By.ID, value="R1C1"))
             years = year_cmb.options  # fetching all options of year selection as web element
