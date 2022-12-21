@@ -1,3 +1,3 @@
-user_email="shovalshabi@gmail.com"
-user_password="7ppwwsy4x"
-afeka_username="shoval.shabi"
+user_email="your-email"
+user_password="your-afeka-password"
+afeka_username="your-afeka-username"
