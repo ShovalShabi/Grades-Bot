@@ -33,8 +33,6 @@ class Bot(Thread):
     @bot_email: str , representing the email of the bot email !--static for all instances--!
     @bot_email_password: str , representing the email password of the bot !--static for all instances--!
     @mail_lock: Lock object, designated for preventing race condition on valuable actions that has to be synchronized !--static for all instances--!
-    @save_lock: Lock object, designated for preventing race condition on valuable actions that has to be synchronized !--static for all instances--!
-    @load_lock: Lock object, designated for preventing race condition on valuable actions that has to be synchronized !--static for all instances--!
     """
 
     serviced_path = Service("C:\Program Files\WebScraping\chromedriver.exe")
