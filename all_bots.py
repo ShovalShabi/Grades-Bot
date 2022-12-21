@@ -1,13 +1,15 @@
 import smtplib
 import ssl
+import sys
 import time
 import json
+
+from datetime import datetime
 from copy import deepcopy
 from threading import Thread
 from threading import Lock
-from selenium.common.exceptions import TimeoutException
-from selenium.common.exceptions import NoSuchElementException
-from selenium.common.exceptions import InvalidSessionIdException
+from selenium.common.exceptions import TimeoutException,NoSuchWindowException,\
+    NoSuchElementException, WebDriverException, InvalidSessionIdException
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from Course import Course
@@ -19,6 +21,7 @@ from selenium.webdriver.support.ui import Select
 from afeka_application import Application
 
 #************************************************************************************ Father class Bot **************************************************************************************#
+
 class Bot(Thread):
     """
     A class that represent a Bot for grades scarping from college site.
@@ -35,12 +38,10 @@ class Bot(Thread):
     """
 
     serviced_path = Service("C:\Program Files\WebScraping\chromedriver.exe")
-    bot_email = "your-bot-email@gmail.com"
-    bot_email_password = "your-bot-app-password"  # application password for Google account
+    bot_email = "your-bot's-email"
+    bot_email_password = "your-bot's-email-password"  # application password for Google account
     port = 465  # ssl protocol port
     mail_lock = Lock()
-    save_lock = Lock()
-    load_lock = Lock()
 
     def __init__(self,user,trgt_url):
         """
@@ -73,6 +74,8 @@ class Bot(Thread):
             server.login(self.bot_email, self.bot_email_password)
             server.sendmail(to_addrs=target_user.email, msg=message, from_addr=self.bot_email)
         self.mail_lock.release()
+        now=datetime.now()
+        print("{} sent mail at {}".format(self.__class__.__name__,now.strftime("%d/%m/%Y %H:%M:%S")))
 
     def reconnect(self,msg,login_func) -> None:
         """
@@ -82,13 +85,15 @@ class Bot(Thread):
         :return: None
         """
         while True:
-            login_func()  #costumizing different login functions for different bots
-            time.sleep(2)
+            login_func()  # customizing different login functions for different bots
+            self.driver.refresh()
             if self.driver.title in ["ציונים - שובל שאבי","דף הבית","אפקה-נט לסטודנט אפקה - המכללה האקדמית להנדסה בתל-אביב",
                                      "אפקה-נט לסטודנט אפקה - המכללה האקדמית להנדסה בתל-אביב רשימת ציונים","מכללת אפקה"]:
-                self.driver.close()
                 break
+        self.driver.close()
         self.send_mail(msg,self.user)
+        now = datetime.now()
+        print("{} got reconnected at {}".format(self.__class__.__name__, now.strftime("%d/%m/%Y %H:%M:%S")))
 
     def load_from_file(self,file_name) -> dict:
         """
@@ -96,12 +101,10 @@ class Bot(Thread):
         :param file_name:str, file name for saving to (should be json format)
         :return: dict
         """
-
-        # self.load_lock.acquire()
-        print(f'loading from file {file_name}...')
         try:
             data_from_file = json.loads(open(file_name, "r").read())
-            # self.load_lock.release()
+            now = datetime.now()
+            print("{} loaded file {} at {}".format(self.__class__.__name__,file_name,now.strftime("%d/%m/%Y %H:%M:%S")))
             return data_from_file
         except json.decoder.JSONDecodeError:
             pass
@@ -113,10 +116,9 @@ class Bot(Thread):
         :param file_name:
         :return:
         """
-        # self.save_lock.acquire()
-        print(f'saving to file {file_name}...')
         json.dump(obj=data,fp=open(file_name,"w",encoding='utf-8'),ensure_ascii=False)
-        # self.save_lock.release()
+        now = datetime.now()
+        print("{} saved file {} at {}".format(self.__class__.__name__, file_name, now.strftime("%d/%m/%Y %H:%M:%S")))
 
 class AfekaBot(Bot):
     """
@@ -135,7 +137,6 @@ class AfekaBot(Bot):
         Method that designated for Afeka college login.
         :return: None
         """
-        print("Entering to afeka...")
         try:
             self.driver.get(self.target_url)
             while self.driver.title != 'אפקה-נט לסטודנט אפקה - המכללה האקדמית להנדסה בתל-אביב':
@@ -144,8 +145,16 @@ class AfekaBot(Bot):
                 text_dict['text'].send_keys(self.user.username)
                 text_dict['password'].send_keys(self.user.password)
                 text_dict['password'].send_keys(Keys.RETURN)  # pressing enter to continue to next page
-        except (NoSuchElementException, TimeoutException):
-            self.reconnect(msg="I failed enter Afeka site, going air soon!",login_func=self.enter_afeka_site)
+        except (TimeoutException,WebDriverException,InvalidSessionIdException,NoSuchWindowException, NoSuchElementException) as ex:
+            if ex is WebDriverException or ex is InvalidSessionIdException or\
+                    ex is NoSuchWindowException or ex is NoSuchElementException:
+                self.driver.close()
+                time.sleep(1*60)
+                self.reconnect(msg="Subject:Got {}\n\nI failed enter Afeka site, going air soon!".format(ex.__class__.__name__), login_func=self.enter_afeka_site)
+            elif ex is TimeoutException:
+                self.driver.close()
+            now = datetime.now()
+            print("{} Got {} while trying to enter Afeka site at {} ".format(self.__class__.__name__,ex,now.strftime("%d/%m/%Y %H:%M:%S")),file=sys.stderr)
 
 #*************************************************************************** Grades Bot *****************************************************************************************************#
 
@@ -180,12 +189,10 @@ class GradesBot(AfekaBot):
         Method that designated for grades sheet swipe.
         :return: None
         """
-        print("Swiping grades...")
         try:
             grades_sheet_btn = WebDriverWait(self.driver,10).until(EC.presence_of_element_located((By.PARTIAL_LINK_TEXT,"רשימת ציונים")))  #Navigating to grades sheet section
             #grades_sheet_btn = self.driver.find_element(by=By.PARTIAL_LINK_TEXT, value="רשימת ציונים")
             grades_sheet_btn.click()
-
             year_cmb = Select(self.driver.find_element(by=By.ID, value="R1C1"))
             years = year_cmb.options  # fetching all options of year selection as web element
             for i, year in enumerate(years):
@@ -210,8 +217,17 @@ class GradesBot(AfekaBot):
                 grade = web_element.find_element(by=By.XPATH, value=f'//*[@id="{element_id}"]/div/div[5]/b')
                 course = Course(name_course.text, type_grade.text, grade.text)
                 self.temp_courses[self.semester_selection][name_course.text + " " + type_grade.text] = course
-        except (NoSuchElementException, TimeoutException):
-            self.reconnect(msg="I failed for sweeping your grades, going air soon!",login_func=self.enter_afeka_site)
+        except (TimeoutException, WebDriverException, InvalidSessionIdException, NoSuchWindowException, NoSuchElementException) as ex:
+            if ex is WebDriverException or ex is InvalidSessionIdException or \
+                    ex is NoSuchWindowException or ex is NoSuchElementException:
+                self.driver.close()
+                time.sleep(1 * 60)
+                self.reconnect(msg="Subject:Got {}\n\nI failed for sweeping your grades, going air soon!".format(ex.__class__.__name__), login_func=self.enter_afeka_site)
+            elif ex is TimeoutException:
+                self.driver.close()
+
+            now=datetime.now()
+            print("Got {} while trying to sweep grades at {} ".format(ex.__class__.__name__, now.strftime("%d/%m/%Y %H:%M:%S")),file=sys.stderr)
 
         if not self.current_courses:
             not_coded_json=self.load_from_file(file_name="grades.json")
@@ -240,8 +256,10 @@ class GradesBot(AfekaBot):
             if flag_changed:
                 encoded_data=self.encode_to_json(dictionary=self.temp_courses, user=self.user)  #saving dictionary as JSON format
                 self.save_to_file(data=encoded_data, file_name="grades.json")
-        except KeyError:
-            self.reconnect(msg="I failed in grade modification checkup, going air soon!",login_func=self.enter_afeka_site)
+        except KeyError as ex:
+            self.reconnect(msg="Subject:Got {}\n\nI failed in grade modification checkup, going air soon!".format(ex),login_func=self.enter_afeka_site)
+            now=datetime.now()
+            print("Got {} while trying to check grade modification at {} ".format(ex.__class__.__name__, now.strftime("%d/%m/%Y %H:%M:%S")),file=sys.stderr)
 
     def encode_to_json(self, dictionary, user) -> dict:
         """
@@ -283,7 +301,8 @@ class GradesBot(AfekaBot):
             self.sweep_grades()
             self.check_if_grades_modified()
             self.driver.close()
-            time.sleep(1*60)
+            # self.current_courses[self.user.semester_selection]["10110 מערכות משובצות מחשב מעבדה"].grade="100"
+            time.sleep(3*60)
 
 #***************************************************************************** Application Bot **********************************************************************************************#
 
@@ -316,15 +335,27 @@ class ApplicationBot(AfekaBot):
         Method for locating and entering application page within college site.
         :return: None
         """
-        applications = WebDriverWait(self.driver,10).until(EC.presence_of_element_located((By.PARTIAL_LINK_TEXT,"מעקב פניות")))
-        applications.click()
+        try:
+            applications = WebDriverWait(self.driver,10).until(EC.presence_of_element_located((By.PARTIAL_LINK_TEXT,"מעקב פניות")))
+            applications.click()
+        except (TimeoutException, WebDriverException, InvalidSessionIdException, NoSuchWindowException, NoSuchElementException) as ex:
+            if ex is WebDriverException or ex is InvalidSessionIdException or \
+                    ex is NoSuchWindowException or ex is NoSuchElementException:
+                self.driver.close()
+                time.sleep(1 * 60)
+                self.reconnect(msg="Subject:Got {}\n\nI failed to fetch applications, going on air soon!".format(ex.__class__.__name__), login_func=self.enter_afeka_site)
+
+            elif ex is TimeoutException:
+                self.driver.close()
+
+            now = datetime.now()
+            print("Got {} while trying to fetch fetch applications at {} ".format(ex.__class__.__name__, now.strftime("%d/%m/%Y %H:%M:%S")),file=sys.stderr)
 
     def swipe_applications(self) -> None:
         """
         Method that designated for swiping applications.
         :return: None
         """
-        print("Swiping applications...")
         try:
             all_rows = WebDriverWait(self.driver,10).until(EC.presence_of_all_elements_located((By.XPATH,"//*[@role='row']")))
             for row in all_rows:
@@ -335,8 +366,18 @@ class ApplicationBot(AfekaBot):
                 if app_dict:
                     application = Application(description=app_dict["description"], date_time=app_dict["date&time"], serial_number=app_dict["no.application"], status=app_dict["status"])
                     self.temp_applications[application.serial_number] = application
-        except NoSuchElementException:
-            self.send_mail("Cannot locate object while swiping applications",self.user)
+        except (TimeoutException, WebDriverException, InvalidSessionIdException, NoSuchWindowException, NoSuchElementException) as ex:
+            if ex is WebDriverException or ex is InvalidSessionIdException or \
+                    ex is NoSuchWindowException or ex is NoSuchElementException:
+                self.driver.close()
+                time.sleep(1 * 60)
+                self.reconnect(msg="Subject:Got {}\n\nI failed to swipe applications".format(ex.__class__.__name__), login_func=self.enter_afeka_site)
+
+            elif ex is TimeoutException:
+                self.driver.close()
+
+            now = datetime.now()
+            print("Got {} while trying to sweep for applications at {} ".format(ex.__class__.__name__, now.strftime("%d/%m/%Y %H:%M:%S")),file=sys.stderr)
 
         if not self.current_applications:
             not_coded_json = self.load_from_file(file_name="applications.json")
@@ -379,7 +420,6 @@ class ApplicationBot(AfekaBot):
             self.save_to_file(data=encoded_data, file_name="applications.json")
             decoded_data=self.load_from_file(file_name="applications.json")
             self.current_applications=self.decode_from_json(data_json=decoded_data)
-            self.reconnect(msg="I failed in applications modification checkup, going air soon!",login_func=self.enter_afeka_site)
 
     def encode_to_json(self, dictionary) -> dict:
         """
@@ -407,6 +447,7 @@ class ApplicationBot(AfekaBot):
             temp_dict[serial_number]=Application(description=app_dict['description'],date_time=app_dict['date_time'],serial_number=app_dict['serial_number'],status=app_dict['status'])
         return temp_dict
 
+    #Swiping applications procedure
     def run(self) -> None:
         """
         Functionality of the bot.
@@ -419,7 +460,8 @@ class ApplicationBot(AfekaBot):
             self.swipe_applications()
             self.check_if_status_changed()
             self.driver.close()
-            time.sleep(1*60)
+            # self.current_applications["855577"].status="טיפול"
+            time.sleep(3*60)
 
 #*********************************************************************************** Moodle Bot *********************************************************************************************#
 
@@ -456,7 +498,6 @@ class MoodleBot(Bot):
         :return: None
         """
         try:
-            print("Entering Moodle...")
             self.driver.get(self.target_url)  # entering moodle
             WebDriverWait(self.driver,10).until(EC.presence_of_element_located((By.NAME,"username")))  # Waiting for page to load
             username = self.driver.find_element(by=By.NAME, value="username")
@@ -464,8 +505,18 @@ class MoodleBot(Bot):
             username.send_keys(self.user.username)
             password.send_keys(self.user.password)
             password.send_keys(Keys.RETURN)
-        except (NoSuchElementException, TimeoutException, InvalidSessionIdException):
-            self.reconnect(msg="I failed to enter moodle, going on air soon!",login_func=self.enter_to_moodle)
+        except (TimeoutException, WebDriverException, InvalidSessionIdException, NoSuchWindowException, NoSuchElementException) as ex:
+            if ex is WebDriverException or ex is InvalidSessionIdException or \
+                    ex is NoSuchWindowException or ex is NoSuchElementException:
+                self.driver.close()
+                time.sleep(1 * 60)
+                self.reconnect(msg="Subject:Got {}\n\nI failed to enter Moodle, going on air soon!".format(ex.__class__.__name__), login_func=self.enter_to_moodle)
+
+            elif ex is TimeoutException:
+                self.driver.close()
+
+            now = datetime.now()
+            print("Got {} while trying to entering Moodle at {} ".format(ex.__class__.__name__, now.strftime("%d/%m/%Y %H:%M:%S")),file=sys.stderr)
 
     def select_year_of_swipe(self) -> None:
         """
@@ -480,8 +531,17 @@ class MoodleBot(Bot):
                 if self.user.year_selection in item.text:
                     item.click()
                     break
-        except (NoSuchElementException, TimeoutException, InvalidSessionIdException):
-            self.reconnect(msg="I failed to select year in moodle, going on air soon!", login_func=self.enter_to_moodle)
+        except (TimeoutException, WebDriverException, InvalidSessionIdException, NoSuchWindowException, NoSuchElementException) as ex:
+            if ex is WebDriverException or ex is InvalidSessionIdException or \
+                    ex is NoSuchWindowException or ex is NoSuchElementException:
+                self.driver.close()
+                time.sleep(1 * 60)
+                self.reconnect(msg="Subject:Got {}\n\nI failed to select year in Moodle, going on air soon!".format(ex.__class__.__name__),login_func=self.enter_to_moodle)
+            elif ex is TimeoutException:
+                self.driver.close()
+
+            now = datetime.now()
+            print("Got {} while trying to select year in Moodle at {} ".format(ex.__class__.__name__, now.strftime("%d/%m/%Y %H:%M:%S")),file=sys.stderr)
 
     def go_to_grades_table(self) -> None:
         """
@@ -490,13 +550,22 @@ class MoodleBot(Bot):
         """
         try:
             # going to grades table
-            print("Going to assignments table...")
             properties = WebDriverWait(self.driver,10).until(EC.presence_of_element_located((By.ID,"usermenu")))
             properties.click()
             grades_btn = self.driver.find_element(by=By.PARTIAL_LINK_TEXT, value="ציונים")
             grades_btn.click()
-        except (NoSuchElementException, TimeoutException, InvalidSessionIdException):
-            self.reconnect(msg="I failed to enter grades table in moodlr, going air soon",login_func=self.enter_to_moodle)
+        except (NoSuchElementException, TimeoutException,WebDriverException) as ex:
+            if ex is WebDriverException or ex is InvalidSessionIdException or \
+                    ex is NoSuchWindowException or ex is NoSuchElementException:
+                self.driver.close()
+                time.sleep(1 * 60)
+                self.reconnect(msg="Subject:Got {}\n\nI failed to enter grades table in Moodle, going air soon".format(ex.__class__.__name__),login_func=self.enter_to_moodle)
+
+            elif ex is TimeoutException:
+                self.driver.close()
+
+            now = datetime.now()
+            print("Got {} while trying to enter grades table in Moodle at {} ".format(ex.__class__.__name__, now.strftime("%d/%m/%Y %H:%M:%S")),file=sys.stderr)
 
     def fetch_all_courses_links(self) -> None:
         """
@@ -511,8 +580,18 @@ class MoodleBot(Bot):
             for element in rows_elements:
                 links_courses.append(self.driver.find_element(by=By.XPATH, value=f'//*[@id="{element.get_attribute("id") + "_c0"}"]/a'))
             self.courses_links = links_courses
-        except (NoSuchElementException, TimeoutException, InvalidSessionIdException):
-            self.reconnect(msg="I failed to fetch courses links in moodle, going on air soon!", login_func=self.enter_to_moodle)
+        except (NoSuchElementException, TimeoutException, WebDriverException) as ex:
+            if ex is WebDriverException or ex is InvalidSessionIdException or \
+                    ex is NoSuchWindowException or ex is NoSuchElementException:
+                self.driver.close()
+                time.sleep(1 * 60)
+                self.reconnect(msg="Subject:Got {}\n\nI failed to fetch courses links in Moodle, going on air soon!".format(ex.__class__.__name__), login_func=self.enter_to_moodle)
+
+            elif ex is TimeoutException:
+                self.driver.close()
+
+            now = datetime.now()
+            print("Got {} while trying to fetch courses links in Moodle at {} ".format(ex.__class__.__name__, now.strftime("%d/%m/%Y %H:%M:%S")),file=sys.stderr)
 
     def swipe_assignments(self) -> None:
         """
@@ -520,20 +599,29 @@ class MoodleBot(Bot):
         :return: None
         """
         try:
-            print("Swiping assignments...")
             for item in self.courses_links:
                 course_name = item.text
                 item.click()  # Entering to course assignments
 
-                assignments_elements = WebDriverWait(self.driver,10).until(EC.presence_of_all_elements_located((By.CLASS_NAME,"gradeitemheader")))  # Fetching assignments elements
+                assignments_elements = WebDriverWait(self.driver,1*60).until(EC.presence_of_all_elements_located((By.CLASS_NAME,"gradeitemheader")))  # Fetching assignments elements
                 grades_elements = self.driver.find_elements(By.XPATH, value='//*[@class="level2 leveleven item b1b itemcenter  column-grade"]')  # fetching grades elements
                 for assignment_name, grade in zip(assignments_elements, grades_elements):
                     if course_name not in self.temp_assignments.keys():
                         self.temp_assignments[course_name] = {}
                     self.temp_assignments[course_name][assignment_name.text] = Course(name=course_name, type_of_grade=assignment_name.text, grade=grade.text)
                 self.driver.back()  # Going back to all courses table assignments
-        except (NoSuchElementException, TimeoutException):
-            self.reconnect(msg="I failed to swipe assignments grades in moodle, going on air soon!", login_func=self.enter_to_moodle)
+        except (NoSuchElementException, TimeoutException, WebDriverException) as ex:
+            if ex is WebDriverException or ex is InvalidSessionIdException or \
+                    ex is NoSuchWindowException or ex is NoSuchElementException:
+                self.driver.close()
+                time.sleep(1 * 60)
+                self.reconnect(msg="Subject:{}\n\nI failed to swipe assignments in moodle, going on air soon!".format(ex.__class__.__name__), login_func=self.enter_to_moodle)
+            elif ex is TimeoutException:
+                self.driver.close()
+
+            now = datetime.now()
+            print("Got {} while trying to swipe assignments in Moodle at {} ".format(ex.__class__.__name__, now.strftime("%d/%m/%Y %H:%M:%S")),file=sys.stderr)
+
         if not self.current_assignments:
             not_coded_json = self.load_from_file(file_name="assignments.json")
             if not_coded_json is not None:
@@ -544,7 +632,6 @@ class MoodleBot(Bot):
         Method that check for modification in assignments and exams.
         :return: None
         """
-        print("Checking if assignments changed...")
         if len(self.current_assignments) == 0:
             encoded_data = self.encode_to_json(dictionary=self.temp_assignments)
             self.save_to_file(data=encoded_data, file_name="assignments.json")
@@ -575,7 +662,6 @@ class MoodleBot(Bot):
             self.save_to_file(data=encoded_data, file_name="assignments.json")
             decoded_data = self.load_from_file(file_name="assignments.json")
             self.current_assignments = self.decode_from_json(data_json=decoded_data)
-            self.reconnect(msg="I failed in assignment grade modification checkup, going air soon!", login_func=self.enter_to_moodle)
 
     def encode_to_json(self, dictionary) -> dict:
         """
@@ -594,7 +680,7 @@ class MoodleBot(Bot):
     def decode_from_json(self, data_json) -> dict:
         """
         Method that decode data of dictionary as represented in the init method.
-        Data will be presented as: {"no.application":{"description":description,"date_time":date_time,"serial_number":serial_number,"status":status}} , values in inner dict are str.
+        Data will be presented as: {"course name":{"assignment name":{"course name" + "course type":{"course_name": name,"type_course": type, "grade": grade}}}}
         :param data_json:dict, serializable object
         :return: dict
         """
@@ -605,6 +691,7 @@ class MoodleBot(Bot):
                 temp_dict[course_name][assignment_name] = Course(name=course_dict['name'], type_of_grade=course_dict['type_of_grade'], grade=course_dict['grade'])
         return temp_dict
 
+    #Swiping assignments procedure
     def run(self) -> None:
         """
         Functionality of the bot.
@@ -619,5 +706,6 @@ class MoodleBot(Bot):
             self.swipe_assignments()
             self.check_if_changed()
             self.driver.close()
-            time.sleep(1 * 60)
+            # self.current_assignments["231012100 - אלגוריתם מתקדם הרצאה - מרוכז"]["תרגיל 1"].grade=90
+            time.sleep(3 * 60)
 
