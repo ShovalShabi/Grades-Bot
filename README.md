@@ -22,4 +22,4 @@ There are several types of bots that have polymorphism mechanisms, In addition t
 4. Add file my keys and within it put your credentials by the order of the arguments in the User class init function.
 
 **Attention**
-**This Bot is relevant only for Afeka Students and the bot is up to date for the Afeka website and Moodle for the date 25/10/2022** 
+**This Bot is relevant only for Afeka Students and the bot is up to date for the Afeka website and Moodle for the date 22/12/2022** 
