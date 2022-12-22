@@ -17,7 +17,7 @@ There are several types of bots that have polymorphism mechanisms, In addition t
 
 **Requirements:**
 1. Peronal gmail account for the bot.
-2. Selenium version 4.0.0 (I recommend this version), needs to be installed in the interpreter's settings.
+2. Selenium version 4.0.0 and onwards (I recommend this version), needs to be installed in the interpreter's settings.
 3. Up-to-date Chrome driver, that matches your browser version (google for chrome driver installation and enter the first link that shows up).
 4. Add file my keys and within it put your credentials by the order of the arguments in the User class init function.
 
