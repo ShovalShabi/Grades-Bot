@@ -35,7 +35,7 @@ class Bot(Thread):
     @mail_lock: Lock object, designated for preventing race condition on valuable actions that has to be synchronized !--static for all instances--!
     """
 
-    serviced_path = Service("C:\Program Files\WebScraping\chromedriver.exe")
+    serviced_path = Service("/home/shoval/Documents/WebScraping/chromedriver")
     bot_email = "your-bot's-email"
     bot_email_password = "your-bot's-email-password"  # application password for Google account
     port = 465  # ssl protocol port
@@ -152,7 +152,7 @@ class AfekaBot(Bot):
             elif ex is TimeoutException:
                 self.driver.close()
             now = datetime.now()
-            print("{} Got {} while trying to enter Afeka site at {} ".format(self.__class__.__name__,ex,now.strftime("%d/%m/%Y %H:%M:%S")),file=sys.stderr)
+            print("{} Got {} while trying to enter Afeka site at {} ".format(self.__class__.__name__,ex.__class__.__name__,now.strftime("%d/%m/%Y %H:%M:%S")),file=sys.stderr)
 
 #*************************************************************************** Grades Bot *****************************************************************************************************#
 
@@ -189,6 +189,7 @@ class GradesBot(AfekaBot):
         """
         try:
             grades_sheet_btn = WebDriverWait(self.driver,10).until(EC.presence_of_element_located((By.PARTIAL_LINK_TEXT,"רשימת ציונים")))  #Navigating to grades sheet section
+            #grades_sheet_btn = self.driver.find_element(by=By.PARTIAL_LINK_TEXT, value="רשימת ציונים")
             grades_sheet_btn.click()
             year_cmb = Select(self.driver.find_element(by=By.ID, value="R1C1"))
             years = year_cmb.options  # fetching all options of year selection as web element
@@ -293,7 +294,10 @@ class GradesBot(AfekaBot):
         :return: None
         """
         while True:
-            self.driver = webdriver.Chrome(service=self.serviced_path)
+            try:
+                self.driver = webdriver.Chrome(service=self.serviced_path)
+            except WebDriverException:
+                continue
             self.enter_afeka_site()
             self.sweep_grades()
             self.check_if_grades_modified()
@@ -451,7 +455,10 @@ class ApplicationBot(AfekaBot):
         :return: None
         """
         while True:
-            self.driver = webdriver.Chrome(service=self.serviced_path)
+            try:
+                self.driver = webdriver.Chrome(service=self.serviced_path)
+            except WebDriverException:
+                continue
             self.enter_afeka_site()
             self.go_to_applications_sheet()
             self.swipe_applications()
@@ -695,7 +702,10 @@ class MoodleBot(Bot):
         :return: None
         """
         while True:
-            self.driver = webdriver.Chrome(service=self.serviced_path)
+            try:
+                self.driver = webdriver.Chrome(service=self.serviced_path)
+            except WebDriverException:
+                continue
             self.enter_to_moodle()
             self.select_year_of_swipe()
             self.go_to_grades_table()
